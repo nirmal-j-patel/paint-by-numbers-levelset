@@ -60,6 +60,9 @@
 #include <vtkProperty2D.h>
 #include <vtkPolyData.h>
 
+// BSpline code
+#include "bspline.h"
+
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
