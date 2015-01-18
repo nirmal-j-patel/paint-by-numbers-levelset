@@ -88,6 +88,10 @@ private slots:
 
     void on_symmetryRadioButton_clicked();
 
+    void on_brokenContourRadioBox_clicked();
+
+    void on_connectContourButton_clicked();
+
 private:
     Ui::MainWindow *ui;
     
@@ -109,6 +113,7 @@ private:
     void setupITK();
     void generateVesselness();
     void evolveContours();
+    void findSegmentEndPoints();
 
     void showSelectedRectSeedInfo();
     void updateSelectedRectSeedInfo();
@@ -135,6 +140,7 @@ private:
     typedef itk::Image < OutputPixelType, 2 >   OutputImageType;
     
     OutputImageType::Pointer outputImage;
+    OutputImageType::Pointer connectedContourImage;
 
     typedef itk::ImageToVTKImageFilter< InputImageType >   itk2vtkInputImageConnectorType;
     itk2vtkInputImageConnectorType::Pointer itk2vtkInputImageTypeConnector;
@@ -150,12 +156,18 @@ private:
 
     QVector<QPointF> points;
     QPointF axisOfSymmetryPoint;
+    QVector<QPoint> brokenContourPathPoints;
+    QVector<QPair<QPoint, QPoint>> brokenContourEndPoints;
+    QVector<QPair<QPoint, QPoint>> brokenContourConnectivity;
     
     QFutureWatcher<void> vesselnessWatcher;
     QProgressDialog *vesselnessProgressDialog;
 
     QFutureWatcher<void> gacWatcher;
     QProgressDialog *gacProgressDialog;
+
+    QFutureWatcher<void> segmentPointsWatcher;
+    QProgressDialog *segmentPointsProgressDialog;
 
 
     /* -------------

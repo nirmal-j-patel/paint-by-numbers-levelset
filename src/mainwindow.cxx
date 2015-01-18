@@ -18,6 +18,8 @@
 #include <itkExtractImageFilter.h>
 #include <itkFlipImageFilter.h>
 #include <itkCastImageFilter.h>
+#include <itkConnectedComponentImageFilter.h>
+#include <itkBinaryThresholdImageFilter.h>
 
 // Vesselness includes
 #include <itkHessianToObjectnessMeasureImageFilter.h>
@@ -61,7 +63,9 @@
 #include <vtkPolyData.h>
 
 // BSpline code
+#include <Eigen/Dense>
 #include "bspline.h"
+#include "segmentpoints.h"
 
 
 MainWindow::MainWindow(QWidget *parent) :
@@ -91,16 +95,19 @@ void MainWindow::setupITK() {
     smoothenedImage = InputImageType::New();
 
     outputImage = OutputImageType::New();
+    connectedContourImage = OutputImageType::New();
 
     itk2vtkInputImageTypeConnector = itk2vtkInputImageConnectorType::New();
     itk2vtkOutputImageTypeConnector = itk2vtkOutputImageConnectorType::New();
 
     vesselnessProgressDialog = new QProgressDialog(this);
     gacProgressDialog = new QProgressDialog(this);
+    segmentPointsProgressDialog = new QProgressDialog(this);
 
     //connect(&vesselnessWatcher, SIGNAL(finished()), this, SLOT(slot_finished()));
     connect(&vesselnessWatcher, SIGNAL(finished()), vesselnessProgressDialog, SLOT(cancel()));
     connect(&gacWatcher, SIGNAL(finished()), gacProgressDialog, SLOT(cancel()));
+    connect(&segmentPointsWatcher, SIGNAL(finished()), segmentPointsProgressDialog, SLOT(cancel()));
 }
 
 /**
@@ -214,7 +221,7 @@ void MainWindow::on_arrowRadioBox_clicked() {
     this->vesselnessProgressDialog->exec();
 
     ui->qvtkWidget->GetInteractor()->SetInteractorStyle(pointStyle);
-    
+
     scribbleStyle->SetCurrentRenderer(vtkSmartPointer<vtkRenderer>::New());
     scribbleStyle->InitializeTracer(vtkSmartPointer<vtkImageActor>::New());
 }
@@ -247,10 +254,10 @@ void MainWindow::on_pencilRadioBox_clicked() {
 
 void MainWindow::on_eraserRadioBox_clicked() {
     ui->qvtkWidget->GetInteractor()->SetInteractorStyle(pointStyle);
-    
+
     scribbleStyle->SetCurrentRenderer(vtkSmartPointer<vtkRenderer>::New());
     scribbleStyle->InitializeTracer(vtkSmartPointer<vtkImageActor>::New());
-    
+
     ui->stackedWidget->setVisible(false);
 }
 
@@ -394,12 +401,12 @@ void MainWindow::evolveContours() {
         std::cout << "RMS change: " << geodesicActiveContour->GetRMSChange() << std::endl;
 
         BinaryImageType::Pointer temp = thresholder->GetOutput();
-        
-        
-        
-        
-        
-        
+
+
+
+
+
+
         // Dilate the regions
         typedef itk::ImageRegionIteratorWithIndex <InputImageType> InputIteratorType;
         typedef itk::ImageRegionIteratorWithIndex <BinaryImageType> BinaryIteratorType;
@@ -425,11 +432,11 @@ void MainWindow::evolveContours() {
             }
             ++iIt2;
         }
-        
+
         fastMarching2->SetTrialPoints(seed2);
         fastMarching2->SetSpeedConstant(1.0);
         fastMarching2->SetOutputSize(temp->GetBufferedRegion().GetSize());
-        
+
         ThresholdingFilterType::Pointer thresholder2 = ThresholdingFilterType::New();
 
         thresholder2->SetLowerThreshold(-1000.0);
@@ -437,22 +444,22 @@ void MainWindow::evolveContours() {
 
         thresholder2->SetInsideValue(true);
         thresholder2->SetOutsideValue(false);
-        
+
         thresholder2->SetInput(fastMarching2->GetOutput());
         thresholder2->Update();
-        
+
         temp = thresholder2->GetOutput();
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
+
+
+
+
+
+
+
+
+
+
+
 
         OutputPixelType regionPixelValue;
         regionPixelValue.SetRed(rectSeeds[i].color.red());
@@ -584,11 +591,11 @@ void MainWindow::evolveContours() {
     {
         OutputImageType::IndexType index;
         index.Fill(0);
-        
+
         OutputImageType::SizeType size = flipFilter->GetOutput()->GetLargestPossibleRegion().GetSize();
-        
+
         OutputImageType::RegionType region(index, size);
-        
+
         //itk::ImageRegionIteratorWithIndex<OutputImageType> oIt(finalImage, flipFilter->GetOutput()->GetLargestPossibleRegion());
         itk::ImageRegionIteratorWithIndex<OutputImageType> oIt(finalImage, region);
         itk::ImageRegionIteratorWithIndex<OutputImageType> iIt(flipFilter->GetOutput(), flipFilter->GetOutput()->GetLargestPossibleRegion());
@@ -986,41 +993,13 @@ void MainWindow::addPoint(vtkObject* caller, long unsigned int, void* clientData
     unsigned int* point = reinterpret_cast<unsigned int*> ( callData );
 
 
-    if (ui->arrowRadioBox->isChecked()) {
+    if (ui->arrowRadioBox->isChecked() || ui->brokenContourRadioBox->isChecked()) {
         points.push_back(displayToWorld(point[0], point[1]));
         qDebug() << tr("Point added");
     }
     else if (ui->symmetryRadioButton->isChecked()) {
         qDebug() << tr("Axis of symmetry");
-
-#if 0
-        InputImageType::SizeType size = originalImage->GetLargestPossibleRegion().GetSize();
-
-        QPointF pos = displayToWorld(point[0], point[1]);
-
-        InputImageType::IndexType desiredStart;
-        desiredStart[0]  = pos.x();
-        desiredStart[1] = 0;
-
-        InputImageType::SizeType desiredSize;
-        desiredSize[0] = size[0] - pos.x();
-        desiredSize[1] = size[1];
-
-        InputImageType::RegionType desiredRegion(desiredStart, desiredSize);
-
-        typedef itk::ExtractImageFilter< InputImageType, InputImageType > FilterType;
-        FilterType::Pointer filter = FilterType::New();
-        filter->SetExtractionRegion(desiredRegion);
-        filter->SetInput(originalImage);
-        filter->SetDirectionCollapseToIdentity();
-        filter->Update();
-
-        originalImage = filter->GetOutput();
-
-        updateImage(originalImage);
-#else
         axisOfSymmetryPoint = displayToWorld(point[0], point[1]);
-#endif
     }
 }
 
@@ -1478,13 +1457,13 @@ void MainWindow::on_detectArrowButton_clicked() {
             }
 
             std::sort(neighbors.begin(), neighbors.end());
-            
+
 #if 0
             std::cout << "[";
-            
-            for (int i = 0; i < neighbors.size();i++) {
+
+            for (int i = 0; i < neighbors.size(); i++) {
                 std::cout << neighbors[i];
-                
+
                 if (i == neighbors.size()-1) {
                     std::cout << "]";
                 } else {
@@ -1507,7 +1486,7 @@ void MainWindow::on_detectArrowButton_clicked() {
 #if 0
                 iterator_line.SetCenterPixel(thresholder->GetOutsideValue());
 #endif
-                
+
 #if 0
                 median = neighbors[size / 2];
                 iterator.SetCenterPixel(median);
@@ -1565,8 +1544,7 @@ void MainWindow::on_applyLSButton_clicked() {
     selectedRectSeed->color = ui->colorPushButton->palette().color(ui->colorPushButton->backgroundRole());
 }
 
-void MainWindow::on_colorPushButton_clicked()
-{
+void MainWindow::on_colorPushButton_clicked() {
     static QColor lastColor(Qt::red);
     QColor currentColor = QColorDialog::getColor(lastColor);
 
@@ -1581,7 +1559,246 @@ void MainWindow::on_colorPushButton_clicked()
 
 void MainWindow::on_symmetryRadioButton_clicked() {
     ui->qvtkWidget->GetInteractor()->SetInteractorStyle(pointStyle);
-    
+
     scribbleStyle->SetCurrentRenderer(vtkSmartPointer<vtkRenderer>::New());
     scribbleStyle->InitializeTracer(vtkSmartPointer<vtkImageActor>::New());
+}
+
+void MainWindow::findSegmentEndPoints() {
+    generateVesselness();
+
+
+
+
+
+    typedef itk::BinaryThresholdImageFilter <InputImageType, InputImageType> BinaryThresholdImageFilterType;
+    BinaryThresholdImageFilterType::Pointer thresholdFilter = BinaryThresholdImageFilterType::New();
+    thresholdFilter->SetInput(vesselnessImage);
+    thresholdFilter->SetLowerThreshold(1);
+    thresholdFilter->SetUpperThreshold(255);
+    thresholdFilter->SetInsideValue(255);
+    thresholdFilter->SetOutsideValue(0);
+
+
+
+
+
+
+
+
+    typedef itk::Image<size_t, 2> LabelImageType;
+    typedef itk::ConnectedComponentImageFilter <InputImageType, LabelImageType > ConnectedComponentImageFilterType;
+    ConnectedComponentImageFilterType::Pointer connected = ConnectedComponentImageFilterType::New();
+    //connected->SetInput(vesselnessImage);
+    connected->SetInput(thresholdFilter->GetOutput());
+
+    try {
+        connected->Update();
+    } catch(itk::ExceptionObject & excep) {
+        std::cerr << "Exception caught !" << std::endl;
+        std::cerr << excep << std::endl;
+    }
+
+    auto segments = getSegments(connected->GetOutput());
+    //qDebug() << "Number of segments" << segments.size();
+
+    brokenContourEndPoints = getSegmentEndPoints(segments);
+    //qDebug() << "Number of end point pairs" << brokenContourEndPoints.size();
+
+    brokenContourConnectivity = findConnections(brokenContourEndPoints, ui->bucketsizeSpinBox->value());
+    //qDebug() << "Number of connectivity pairs" << brokenContourConnectivity.size();
+
+
+
+
+
+
+
+
+
+
+    itk::RGBPixel<unsigned char> black;
+    black.SetRed(0);
+    black.SetGreen(0);
+    black.SetBlue(0);
+
+    itk::RGBPixel<unsigned char> white;
+    white.SetRed(255);
+    white.SetGreen(255);
+    white.SetBlue(255);
+
+    itk::RGBPixel<unsigned char> red;
+    red.SetRed(255);
+    red.SetGreen(0);
+    red.SetBlue(0);
+
+    // draw the image
+    connectedContourImage->CopyInformation(originalImage);
+    connectedContourImage->SetRegions( originalImage->GetLargestPossibleRegion() );
+    connectedContourImage->Allocate();
+    connectedContourImage->FillBuffer(black);
+
+
+
+    auto DrawLine = [] (OutputImageType::Pointer image, const unsigned int &x1, const unsigned int &y1, const unsigned int &x2,const unsigned int &y2, itk::RGBPixel<unsigned char> &value) {
+        OutputImageType::IndexType corner1;
+        corner1[0] = x1;
+        corner1[1] = y1;
+
+        OutputImageType::IndexType corner2;
+        corner2[0] = x2;
+        corner2[1] = y2;
+
+        itk::LineIterator<OutputImageType> it1(image, corner1, corner2);
+        it1.GoToBegin();
+        while (!it1.IsAtEnd()) {
+            it1.Set(value);
+            ++it1;
+        }
+    };
+
+    // draw segments in white
+    for (int i = 0; i < brokenContourEndPoints.size(); i++) {
+        //qDebug() << "Segment " << i << ": " << distance(finalSegments[i].first, finalSegments[i].second);
+        const int x1 = brokenContourEndPoints[i].first.x(),
+                  y1 = brokenContourEndPoints[i].first.y(),
+                  x2 = brokenContourEndPoints[i].second.x(),
+                  y2 = brokenContourEndPoints[i].second.y();
+
+        QRect rect;
+        rect.setCoords(x1, y1, x2, y2);
+
+        DrawLine(connectedContourImage, rect.left(), rect.top(), rect.right(), rect.bottom(), white);
+    }
+
+    // draw connections in red
+    for (int i = 0; i < brokenContourConnectivity.size(); i++) {
+        //qDebug() << "Segment " << i << ": " << distance(finalSegments[i].first, finalSegments[i].second);
+        const int x1 = brokenContourConnectivity[i].first.x(),
+                  y1 = brokenContourConnectivity[i].first.y(),
+                  x2 = brokenContourConnectivity[i].second.x(),
+                  y2 = brokenContourConnectivity[i].second.y();
+
+        QRect rect;
+        rect.setCoords(x1, y1, x2, y2);
+
+        DrawLine(connectedContourImage, rect.left(), rect.top(), rect.right(), rect.bottom(), red);
+    }
+
+    updateImage(connectedContourImage);
+}
+
+void MainWindow::on_brokenContourRadioBox_clicked() {
+    ui->stackedWidget->setCurrentIndex(2);
+    ui->stackedWidget->setVisible(true);
+
+    points.clear();
+
+    // Start the computation.
+    QFuture<void> future = QtConcurrent::run(this, &MainWindow::findSegmentEndPoints);
+    this->segmentPointsWatcher.setFuture(future);
+
+    this->segmentPointsProgressDialog->setMinimum(0);
+    this->segmentPointsProgressDialog->setMaximum(0);
+    this->segmentPointsProgressDialog->setWindowModality(Qt::WindowModal);
+    this->segmentPointsProgressDialog->exec();
+
+    ui->qvtkWidget->GetInteractor()->SetInteractorStyle(pointStyle);
+
+    scribbleStyle->SetCurrentRenderer(vtkSmartPointer<vtkRenderer>::New());
+    scribbleStyle->InitializeTracer(vtkSmartPointer<vtkImageActor>::New());
+
+}
+
+void MainWindow::on_connectContourButton_clicked() {
+    qDebug() << "Total number of segments: " << brokenContourEndPoints.size();
+
+    QPoint start, end;
+
+    size_t dist_start = ui->bucketsizeSpinBox->value();
+    size_t dist_end = ui->bucketsizeSpinBox->value();
+
+    bool found_start = false;
+    bool found_end = false;
+
+    for (size_t i = 0; i < brokenContourEndPoints.size(); i++) {
+        for (size_t j = 0; j < 2; j++) {
+            QPoint p1;
+
+            if (j == 0) {
+                p1 = brokenContourEndPoints[i].first;
+            } else {
+                p1 = brokenContourEndPoints[i].second;
+            }
+            const size_t curr_dist_start = distance(points[0].toPoint(), p1);
+            if (curr_dist_start <= dist_start) {
+                start = p1;
+                dist_start = curr_dist_start;
+                found_start = true;
+            }
+
+            const size_t curr_dist_end = distance(points[1].toPoint(), p1);
+            if (curr_dist_end <= dist_end) {
+                end = p1;
+                dist_end = curr_dist_end;
+                found_end = true;
+            }
+        }
+    }
+    if (found_start && found_end) {
+        qDebug() << "Found both start and end";
+        qDebug() << "Start: " << start;
+        qDebug() << "End: " << end;
+
+        try {
+            brokenContourPathPoints = getContourPoints(start, end, brokenContourEndPoints, brokenContourConnectivity);
+
+            Eigen::RowVectorXd x = Eigen::RowVectorXd::Zero(brokenContourPathPoints.size());
+            Eigen::RowVectorXd y = Eigen::RowVectorXd::Zero(brokenContourPathPoints.size());
+            Eigen::RowVectorXd z = Eigen::RowVectorXd::Zero(brokenContourPathPoints.size());
+
+            for (size_t i = 0; i < brokenContourPathPoints.size(); i++) {
+                x[i] = brokenContourPathPoints[i].x();
+                y[i] = brokenContourPathPoints[i].y();
+            }
+
+            Eigen::MatrixXd P;
+            Eigen::RowVectorXd U;
+
+            const size_t p = 2;
+
+            std::tie(P, U) = GlobalCurveInterp(brokenContourPathPoints.size(), p, x, y, z);
+
+            Eigen::VectorXd u = Eigen::VectorXd::Zero(10001);
+            size_t index = 0;
+            for (float t = 0; t <= 1; t += 0.0001) {
+                u[index++] = t;
+            }
+
+            const Eigen::MatrixXd points = CurvePoint(p, P, U, u);
+
+            for (size_t i = 0; i < 10001; i++) {
+                //std::cout << (int) points(0, i) << " " << (int) points(1, i) << std::endl;
+                InputImageType::IndexType pixelIndex;
+                pixelIndex[0] = points(0, i);
+                pixelIndex[1] = points(1, i);
+
+                originalImage->SetPixel(pixelIndex, 0);
+
+                updateImage(originalImage);
+            }
+        } catch (std::domain_error &e) {
+            QMessageBox::critical(
+                this,
+                tr("Error"),
+                e.what(),
+                QMessageBox::Ok);
+            brokenContourEndPoints.clear();
+            brokenContourConnectivity.clear();
+        }
+    } else {
+        qDebug() << "Could not find either start or end";
+    }
+
+    points.clear();
 }
