@@ -119,25 +119,20 @@ private:
     void updateSelectedRectSeedInfo();
 
     //typedefs for readability
-    //typedef itk::RGBPixel<float> InputPixelType;
-    //typedef itk::RGBPixel<unsigned char> InputPixelType;
     typedef float InputPixelType;
     typedef itk::Image < InputPixelType, 2 >    InputImageType;
 
-    InputImageType::Pointer originalImage;
-    InputImageType::Pointer smoothenedImage;
-
     typedef bool BinaryPixelType;
     typedef itk::Image < BinaryPixelType, 2 >    BinaryImageType;
-    
-    InputImageType::Pointer originalGrayscaleImage;
+
+    typedef itk::RGBPixel<unsigned char> OutputPixelType;
+    typedef itk::Image < OutputPixelType, 2 >   OutputImageType;
+
+
+    InputImageType::Pointer originalImage;
     InputImageType::Pointer vesselnessImage;
     InputImageType::Pointer pathImage;
 
-
-    //typedef itk::RGBPixel<float> OutputPixelType;
-    typedef itk::RGBPixel<unsigned char> OutputPixelType;
-    typedef itk::Image < OutputPixelType, 2 >   OutputImageType;
     
     OutputImageType::Pointer outputImage;
     OutputImageType::Pointer connectedContourImage;
@@ -179,7 +174,7 @@ private:
 
     void updateImage(InputImageType::Pointer image);
     
-    void updateImage(BinaryImageType::Pointer image);
+    //void updateImage(BinaryImageType::Pointer image);
     
     void updateImage(OutputImageType::Pointer image);
     

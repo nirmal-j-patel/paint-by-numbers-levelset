@@ -92,7 +92,7 @@ MainWindow::~MainWindow() {
  */
 void MainWindow::setupITK() {
     originalImage = InputImageType::New();
-    smoothenedImage = InputImageType::New();
+    //smoothenedImage = InputImageType::New();
 
     outputImage = OutputImageType::New();
     connectedContourImage = OutputImageType::New();
@@ -547,13 +547,8 @@ void MainWindow::evolveContours() {
 
 
     OutputImageType::Pointer finalImage = OutputImageType::New();
-#if 0
-    finalImage->SetSpacing( outputImage->GetSpacing() );
-    finalImage->SetOrigin( outputImage->GetOrigin() );
-#else
     finalImage->CopyInformation(filter->GetOutput());
     finalImage->SetRegions( region );
-#endif
     finalImage->Allocate( );
     finalImage->FillBuffer( itk::NumericTraits<OutputPixelType>::max() );
 
@@ -768,7 +763,6 @@ void MainWindow::updateImage(InputImageType::Pointer image) {
     ui->qvtkWidget->update();
 }
 
-#if 1
 void MainWindow::updateImage(OutputImageType::Pointer image) {
     itk2vtkOutputImageTypeConnector = itk2vtkOutputImageConnectorType::New();
 
@@ -800,39 +794,7 @@ void MainWindow::updateImage(OutputImageType::Pointer image) {
     renderer->ResetCamera();
     ui->qvtkWidget->update();
 }
-#endif
 
-void MainWindow::updateImage(BinaryImageType::Pointer image) {
-    itk2vtkBinaryImageTypeConnector = itk2vtkBinaryImageConnectorType::New();
-
-    // convert ITK image to VTK image
-    itk2vtkBinaryImageTypeConnector->SetInput(image);
-
-    try {
-        itk2vtkBinaryImageTypeConnector->Update();
-    }
-
-    catch(itk::ExceptionObject & e) {
-        qDebug() << "Could not convert ITK image to VTK image.";
-
-        qDebug() << "ExceptionObject caught !";
-        qDebug() << e.what();
-
-        return;
-    }
-
-    // connect the converted image to the actor
-    actor->GetMapper()->SetInputData(itk2vtkBinaryImageTypeConnector->GetOutput());
-
-    // if there is no actor in the renderer, add the actor to the renderer
-    if (renderer->GetActors()->GetNumberOfItems() == 0) {
-        renderer->AddActor(actor);
-    }
-
-    // reset the camera to view the entire image and update the widget
-    renderer->ResetCamera();
-    ui->qvtkWidget->update();
-}
 
 void MainWindow::updateCoords(vtkObject* obj) {
     // get interactor
@@ -1034,8 +996,6 @@ QPointF MainWindow::worldToNormalizedDisplay(double x, double y) {
 }
 
 void MainWindow::generateVesselness() {
-#if 1
-
     typedef itk::SymmetricSecondRankTensor< InputPixelType, 2 > HessianPixelType;
     typedef itk::Image< HessianPixelType, 2 >           HessianImageType;
     typedef itk::HessianToObjectnessMeasureImageFilter< HessianImageType, InputImageType >
@@ -1088,11 +1048,9 @@ void MainWindow::generateVesselness() {
         std::cerr << "Exception caught !" << std::endl;
         std::cerr << excep << std::endl;
     }
-#endif
 }
 
 void MainWindow::on_detectArrowButton_clicked() {
-#if 1
     typedef itk::PolyLineParametricPath< 2 > PathType;
     typedef itk::SpeedFunctionToPathFilter< InputImageType, PathType > PathFilterType;
     typedef typename PathFilterType::CostFunctionType::CoordRepType CoordRepType;
@@ -1163,9 +1121,7 @@ void MainWindow::on_detectArrowButton_clicked() {
         pathFilter->AddPathInfo(info);
         pathFilter->AddPathInfo(info_reversed);
 
-#if 1
         points.clear();
-#endif
 
         // Compute the path
         qDebug() << "Computing path...";
@@ -1219,16 +1175,6 @@ void MainWindow::on_detectArrowButton_clicked() {
 
 
 
-
-
-
-
-
-
-
-
-
-#if 1
     // remove the arrows
     typedef itk::ImageRegionIteratorWithIndex <InputImageType> InputIteratorType;
 
@@ -1261,7 +1207,6 @@ void MainWindow::on_detectArrowButton_clicked() {
 
     fastMarching->SetTrialPoints(seed);
     fastMarching->SetSpeedConstant(1.0);
-    //fastMarching->SetSpeedConstant(0.01);
     fastMarching->SetOutputSize(originalImage->GetBufferedRegion().GetSize());
 
 
@@ -1306,7 +1251,6 @@ void MainWindow::on_detectArrowButton_clicked() {
     sigmoid->SetOutputMaximum(  1.0  );
 
     sigmoid->SetAlpha(-0.5);
-    //sigmoid->SetAlpha(0.5);
     sigmoid->SetBeta(3.00);
 
     typedef  itk::GeodesicActiveContourLevelSetImageFilter< InputImageType,
@@ -1315,30 +1259,20 @@ void MainWindow::on_detectArrowButton_clicked() {
         GeodesicActiveContourFilterType::New();
 
     geodesicActiveContour->SetPropagationScaling( 2.0 );
-
-#if 0
     geodesicActiveContour->SetCurvatureScaling( 1.0 );
     geodesicActiveContour->SetAdvectionScaling( 1.0 );
-#else
-    geodesicActiveContour->SetCurvatureScaling( 1 );
-    geodesicActiveContour->SetAdvectionScaling( 1.0 );
-#endif
 
     geodesicActiveContour->SetMaximumRMSError( 0.05 );
-    //geodesicActiveContour->SetNumberOfIterations( 50 );
     geodesicActiveContour->SetNumberOfIterations( 100 );
 
     smoothing->SetInput( originalImage );
     gradientMagnitude->SetInput( smoothing->GetOutput() );
     sigmoid->SetInput( gradientMagnitude->GetOutput() );
 
-    //geodesicActiveContour->SetInput(  pathImage );
     geodesicActiveContour->SetInput(  fastMarching->GetOutput() );
-    //geodesicActiveContour->SetFeatureImage( sigmoid->GetOutput() );
     geodesicActiveContour->SetFeatureImage( vesselnessImage );
 
     thresholder->SetInput( geodesicActiveContour->GetOutput() );
-    //writer->SetInput( thresholder->GetOutput() );
 
     try {
         thresholder->Update();
@@ -1444,33 +1378,16 @@ void MainWindow::on_detectArrowButton_clicked() {
     itk::NeighborhoodIterator<BinaryImageType> iterator_line(radius, temp_line, temp_line->GetLargestPossibleRegion());
 
     while(!iterator.IsAtEnd() && !iterator_line.IsAtEnd()) {
-#if 1
-        //if (iterator_line.GetCenterPixel() == thresholder->GetOutsideValue()) {
         if (iterator_line.GetCenterPixel() == thresholder->GetInsideValue()) {
             std::vector<int> neighbors;
 
             for (int i = 0; i < (radius[0]*2+1)*(radius[1]*2+1); i++) {
-                //if (iterator_line.GetPixel(i) == thresholder->GetInsideValue()) {
                 if (iterator_line.GetPixel(i) == thresholder->GetOutsideValue()) {
                     neighbors.push_back(iterator.GetPixel(i));
                 }
             }
 
             std::sort(neighbors.begin(), neighbors.end());
-
-#if 0
-            std::cout << "[";
-
-            for (int i = 0; i < neighbors.size(); i++) {
-                std::cout << neighbors[i];
-
-                if (i == neighbors.size()-1) {
-                    std::cout << "]";
-                } else {
-                    std::cout << ", ";
-                }
-            }
-#endif
 
             size_t size = neighbors.size();
             if(size != 0) {
@@ -1482,32 +1399,12 @@ void MainWindow::on_detectArrowButton_clicked() {
                     median = neighbors[size / 2];
                 }
                 iterator.SetCenterPixel(median);
-
-#if 0
-                iterator_line.SetCenterPixel(thresholder->GetOutsideValue());
-#endif
-
-#if 0
-                median = neighbors[size / 2];
-                iterator.SetCenterPixel(median);
-
-
-                std::cout << "\tMedian: " << median << std::endl;
-#endif
             }
         }
-#else
-        if (iterator_line.GetCenterPixel() == thresholder->GetInsideValue()) {
-            iterator.SetCenterPixel(itk::NumericTraits<InputPixelType>::max());
-        }
-#endif
-        ++iterator;
-        ++iterator_line;
+        ++iterator; ++iterator_line;
     }
 
     updateImage(originalImage);
-
-
 
 
     typedef itk::Image<unsigned char, 2> PNGImageType;
@@ -1529,10 +1426,6 @@ void MainWindow::on_detectArrowButton_clicked() {
         std::cerr << "Exception caught !" << std::endl;
         std::cerr << excep << std::endl;
     }
-
-
-#endif
-#endif
 }
 
 void MainWindow::on_applyLSButton_clicked() {
@@ -1778,7 +1671,6 @@ void MainWindow::on_connectContourButton_clicked() {
             const Eigen::MatrixXd points = CurvePoint(p, P, U, u);
 
             for (size_t i = 0; i < 10001; i++) {
-                //std::cout << (int) points(0, i) << " " << (int) points(1, i) << std::endl;
                 InputImageType::IndexType pixelIndex;
                 pixelIndex[0] = points(0, i);
                 pixelIndex[1] = points(1, i);
