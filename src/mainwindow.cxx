@@ -92,7 +92,6 @@ MainWindow::~MainWindow() {
  */
 void MainWindow::setupITK() {
     originalImage = InputImageType::New();
-    //smoothenedImage = InputImageType::New();
 
     outputImage = OutputImageType::New();
     connectedContourImage = OutputImageType::New();
@@ -104,7 +103,6 @@ void MainWindow::setupITK() {
     gacProgressDialog = new QProgressDialog(this);
     segmentPointsProgressDialog = new QProgressDialog(this);
 
-    //connect(&vesselnessWatcher, SIGNAL(finished()), this, SLOT(slot_finished()));
     connect(&vesselnessWatcher, SIGNAL(finished()), vesselnessProgressDialog, SLOT(cancel()));
     connect(&gacWatcher, SIGNAL(finished()), gacProgressDialog, SLOT(cancel()));
     connect(&segmentPointsWatcher, SIGNAL(finished()), segmentPointsProgressDialog, SLOT(cancel()));
@@ -424,7 +422,8 @@ void MainWindow::evolveContours() {
         while(!iIt2.IsAtEnd()) {
             if (iIt2.Get() == thresholder->GetInsideValue()) {
                 NodeType node;
-                node.SetValue(-5);
+                //node.SetValue(-5);
+                node.SetValue(-2.5);
 
                 node.SetIndex(iIt2.GetIndex());
 
@@ -962,7 +961,28 @@ void MainWindow::addPoint(vtkObject* caller, long unsigned int, void* clientData
     else if (ui->symmetryRadioButton->isChecked()) {
         qDebug() << tr("Axis of symmetry");
         axisOfSymmetryPoint = displayToWorld(point[0], point[1]);
+
+        auto DrawLine = [] (InputImageType::Pointer image, const unsigned int &x1, const unsigned int &y1, const unsigned int &x2,const unsigned int &y2, const InputPixelType &value) {
+            InputImageType::IndexType corner1;
+            corner1[0] = x1;
+            corner1[1] = y1;
+
+            InputImageType::IndexType corner2;
+            corner2[0] = x2;
+            corner2[1] = y2;
+
+            itk::LineIterator<InputImageType> it1(image, corner1, corner2);
+            it1.GoToBegin();
+            while (!it1.IsAtEnd()) {
+                it1.Set(value);
+                ++it1;
+            }
+        };
+
+        InputImageType::SizeType size = originalImage->GetLargestPossibleRegion().GetSize();
+        DrawLine(originalImage, (unsigned int) axisOfSymmetryPoint.x(), 0, (unsigned int) axisOfSymmetryPoint.x(), size[1]-1, 0.0);
     }
+    updateImage(originalImage);
 }
 
 QPointF MainWindow::displayToWorld(double x, double y) {

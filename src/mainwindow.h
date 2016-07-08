@@ -174,8 +174,6 @@ private:
 
     void updateImage(InputImageType::Pointer image);
     
-    //void updateImage(BinaryImageType::Pointer image);
-    
     void updateImage(OutputImageType::Pointer image);
     
     QPointF displayToWorld(double x, double y);
